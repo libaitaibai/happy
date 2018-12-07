@@ -1,0 +1,19 @@
+{
+    "name": "lan/taobao-union",
+    "description": "Taobao alliance official PHP extension package\u001b[B\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[A\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[D\u001b[CSDK extension package",
+    "authors": [
+        {
+            "name": "lanchongyang",
+            "email": "1511214434@qq.com"        
+        } 
+    ],
+    "autoload": {
+        "classmap": [
+        ],
+        "psr-4": {
+            "taobao\\":"vender/taobao/package/src",
+            "taobao\\top\\":"vender/taobao/package/src/top"
+        }
+    },
+    "require": {}
+}
