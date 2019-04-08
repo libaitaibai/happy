@@ -73,6 +73,12 @@ class TbkDgOptimusMaterialRequest
 		$this->apiParas["content_id"] = $contentId;
 	}
 
+    public function setItemId($contentId)
+    {
+        $this->itemId = $contentId;
+        $this->apiParas["item_id"] = $contentId;
+    }
+
 	public function getContentId()
 	{
 		return $this->contentId;
