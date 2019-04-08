@@ -147,10 +147,10 @@ class Mailable implements MailableContract, Renderable
      */
     public function send(MailerContract $mailer)
     {
-        $this->withLocale($this->locale, function () use ($mailer) {
+        return $this->withLocale($this->locale, function () use ($mailer) {
             Container::getInstance()->call([$this, 'build']);
 
-            $mailer->send($this->buildView(), $this->buildViewData(), function ($message) {
+            return $mailer->send($this->buildView(), $this->buildViewData(), function ($message) {
                 $this->buildFrom($message)
                      ->buildRecipients($message)
                      ->buildSubject($message)
@@ -553,7 +553,7 @@ class Mailable implements MailableContract, Renderable
     }
 
     /**
-     * Determine if the given recipient is set on the mailable.
+     * Determine if the given replyTo is set on the mailable.
      *
      * @param  object|array|string  $address
      * @param  string|null  $name

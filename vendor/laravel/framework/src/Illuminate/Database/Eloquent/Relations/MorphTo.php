@@ -7,9 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
-/**
- * @mixin \Illuminate\Database\Eloquent\Builder
- */
 class MorphTo extends BelongsTo
 {
     /**
@@ -82,16 +79,6 @@ class MorphTo extends BelongsTo
                 $this->dictionary[$model->{$this->morphType}][$model->{$this->foreignKey}][] = $model;
             }
         }
-    }
-
-    /**
-     * Get the results of the relationship.
-     *
-     * @return mixed
-     */
-    public function getResults()
-    {
-        return $this->ownerKey ? parent::getResults() : null;
     }
 
     /**
@@ -184,7 +171,7 @@ class MorphTo extends BelongsTo
 
             if (isset($this->dictionary[$type][$ownerKey])) {
                 foreach ($this->dictionary[$type][$ownerKey] as $model) {
-                    $model->setRelation($this->relation, $result);
+                    $model->setRelation($this->relationName, $result);
                 }
             }
         }
@@ -206,7 +193,7 @@ class MorphTo extends BelongsTo
             $this->morphType, $model instanceof Model ? $model->getMorphClass() : null
         );
 
-        return $this->parent->setRelation($this->relation, $model);
+        return $this->parent->setRelation($this->relationName, $model);
     }
 
     /**
@@ -220,7 +207,7 @@ class MorphTo extends BelongsTo
 
         $this->parent->setAttribute($this->morphType, null);
 
-        return $this->parent->setRelation($this->relation, null);
+        return $this->parent->setRelation($this->relationName, null);
     }
 
     /**
@@ -230,9 +217,20 @@ class MorphTo extends BelongsTo
      */
     public function touch()
     {
-        if (! is_null($this->ownerKey)) {
+        if (! is_null($this->child->{$this->foreignKey})) {
             parent::touch();
         }
+    }
+
+    /**
+     * Make a new related instance for the given model.
+     *
+     * @param  \Illuminate\Database\Eloquent\Model  $parent
+     * @return \Illuminate\Database\Eloquent\Model
+     */
+    protected function newRelatedInstanceFor(Model $parent)
+    {
+        return $parent->{$this->getRelationName()}()->getRelated()->newInstance();
     }
 
     /**
