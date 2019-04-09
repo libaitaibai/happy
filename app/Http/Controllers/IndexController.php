@@ -11,6 +11,13 @@ use taobao\top\domain\OpenAccountSearchRequest;
 use Monolog\Logger;
 use taobao\top\request\TbkDgItemCouponGetRequest;
 use taobao\top\request\TbkCouponGetRequest;
+use taobao\top\request\TbkTpwdCreateRequest;
+use taobao\top\request\TbkItemRecommendGetRequest;
+use taobao\top\request\TbkItemGuessLikeRequest;
+use taobao\top\request\TbkUatmFavoritesItemGetRequest;
+use taobao\top\request\TbkDgNewuserOrderGetRequest;
+use taobao\top\request\TbkDgOptimusMaterialRequest;
+use Illuminate\Http\Request;
 
 class IndexController extends BaseController
 {
@@ -26,17 +33,20 @@ class IndexController extends BaseController
     /**
      * 主页
      */
-    public function index()
+    public function index(Request $request)
     {
+        $find = $request->input('find')??'手机';
+
         $c= TopClient::getInstance($this->AppKey,$this->AppSecret);
         $req = TbkItemGetRequest::getInstance();
         $req->setFields("num_iid,title,pict_url,small_images,reserve_price,zk_final_price,user_type,provcity,item_url,seller_id,volume,nick");
-        $req->setQ("荣耀10手机");
-        $data = $c->execute($req);
-//
-//        echo '<pre>';var_dump($data->results);exit;
+        $req->setQ($find);
+        $req->setPageSize("10");
 
-        return view('happy.index.index',['data'=>$data]);
+
+        $data = $c->execute($req);
+
+        return view('happy.index.index',['data'=>$data,'find'=>$find]);
     }
 
     /**
@@ -92,9 +102,16 @@ class IndexController extends BaseController
 
     public function test1()
     {
-        $c= new TopClient($this->AppKey,$this->AppSecret);
-        $req = new AlibabaWholesaleCategoryGetRequest;
+        $c= TopClient::getInstance($this->AppKey,$this->AppSecret);
+
+        $req = new TbkItemGetRequest;
+        $req->setFields("num_iid,title,pict_url,small_images,reserve_price,zk_final_price,user_type,provcity,item_url,seller_id,volume,nick");
+        $req->setQ("猜你喜欢");
+
         $resp = $c->execute($req);
+//        $c= new TopClient($this->AppKey,$this->AppSecret);
+//        $req = new AlibabaWholesaleCategoryGetRequest;
+//        $resp = $c->execute($req);
         echo '<pre>';var_dump($resp);exit;
     }
 
