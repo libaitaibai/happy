@@ -35,7 +35,7 @@ class IndexController extends BaseController
      */
     public function index(Request $request)
     {
-        $find = $request->input('find')??'手机';
+        $find = $request->input('find')??'荣耀手机';
 
         $c= TopClient::getInstance($this->AppKey,$this->AppSecret);
         $req = TbkItemGetRequest::getInstance();
