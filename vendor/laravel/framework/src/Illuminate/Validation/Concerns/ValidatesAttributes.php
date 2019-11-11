@@ -2,24 +2,28 @@
 
 namespace Illuminate\Validation\Concerns;
 
-use DateTime;
 use Countable;
-use Exception;
-use Throwable;
-use DateTimeZone;
+use DateTime;
 use DateTimeInterface;
+use DateTimeZone;
+use Egulias\EmailValidator\EmailValidator;
+use Egulias\EmailValidator\Validation\DNSCheckValidation;
+use Egulias\EmailValidator\Validation\MultipleValidationWithAnd;
+use Egulias\EmailValidator\Validation\NoRFCWarningsValidation;
+use Egulias\EmailValidator\Validation\RFCValidation;
+use Egulias\EmailValidator\Validation\SpoofCheckValidation;
+use Exception;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Date;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Rules\Unique;
 use Illuminate\Validation\ValidationData;
-use Egulias\EmailValidator\EmailValidator;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\File\File;
-use Egulias\EmailValidator\Validation\RFCValidation;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Throwable;
 
 trait ValidatesAttributes
 {
@@ -246,7 +250,7 @@ trait ValidatesAttributes
                 return Date::parse($value);
             }
 
-            return new DateTime($value);
+            return date_create($value) ?: null;
         } catch (Exception $e) {
             //
         }
@@ -495,7 +499,7 @@ trait ValidatesAttributes
      */
     public function validateDimensions($attribute, $value, $parameters)
     {
-        if ($this->isValidFileInstance($value) && $value->getClientMimeType() === 'image/svg+xml') {
+        if ($this->isValidFileInstance($value) && $value->getMimeType() === 'image/svg+xml') {
             return true;
         }
 
@@ -621,16 +625,35 @@ trait ValidatesAttributes
      * Validate that an attribute is a valid e-mail address.
      *
      * @param  string  $attribute
-     * @param  mixed   $value
+     * @param  mixed  $value
+     * @param  array  $parameters
      * @return bool
      */
-    public function validateEmail($attribute, $value)
+    public function validateEmail($attribute, $value, $parameters)
     {
         if (! is_string($value) && ! (is_object($value) && method_exists($value, '__toString'))) {
             return false;
         }
 
-        return (new EmailValidator)->isValid($value, new RFCValidation);
+        $validations = collect($parameters)
+            ->unique()
+            ->map(function ($validation) {
+                if ($validation === 'rfc') {
+                    return new RFCValidation();
+                } elseif ($validation === 'strict') {
+                    return new NoRFCWarningsValidation();
+                } elseif ($validation === 'dns') {
+                    return new DNSCheckValidation();
+                } elseif ($validation === 'spoof') {
+                    return new SpoofCheckValidation();
+                } elseif ($validation === 'filter') {
+                    return new FilterEmailValidation();
+                }
+            })
+            ->values()
+            ->all() ?: [new RFCValidation()];
+
+        return (new EmailValidator)->isValid($value, new MultipleValidationWithAnd($validations));
     }
 
     /**
@@ -891,7 +914,13 @@ trait ValidatesAttributes
             return $this->getSize($attribute, $value) > $parameters[0];
         }
 
-        $this->requireSameType($value, $comparedToValue);
+        if ($this->hasRule($attribute, $this->numericRules) && is_numeric($value) && is_numeric($comparedToValue)) {
+            return $value > $comparedToValue;
+        }
+
+        if (! $this->isSameType($value, $comparedToValue)) {
+            return false;
+        }
 
         return $this->getSize($attribute, $value) > $this->getSize($attribute, $comparedToValue);
     }
@@ -916,7 +945,13 @@ trait ValidatesAttributes
             return $this->getSize($attribute, $value) < $parameters[0];
         }
 
-        $this->requireSameType($value, $comparedToValue);
+        if ($this->hasRule($attribute, $this->numericRules) && is_numeric($value) && is_numeric($comparedToValue)) {
+            return $value < $comparedToValue;
+        }
+
+        if (! $this->isSameType($value, $comparedToValue)) {
+            return false;
+        }
 
         return $this->getSize($attribute, $value) < $this->getSize($attribute, $comparedToValue);
     }
@@ -941,7 +976,13 @@ trait ValidatesAttributes
             return $this->getSize($attribute, $value) >= $parameters[0];
         }
 
-        $this->requireSameType($value, $comparedToValue);
+        if ($this->hasRule($attribute, $this->numericRules) && is_numeric($value) && is_numeric($comparedToValue)) {
+            return $value >= $comparedToValue;
+        }
+
+        if (! $this->isSameType($value, $comparedToValue)) {
+            return false;
+        }
 
         return $this->getSize($attribute, $value) >= $this->getSize($attribute, $comparedToValue);
     }
@@ -966,7 +1007,13 @@ trait ValidatesAttributes
             return $this->getSize($attribute, $value) <= $parameters[0];
         }
 
-        $this->requireSameType($value, $comparedToValue);
+        if ($this->hasRule($attribute, $this->numericRules) && is_numeric($value) && is_numeric($comparedToValue)) {
+            return $value <= $comparedToValue;
+        }
+
+        if (! $this->isSameType($value, $comparedToValue)) {
+            return false;
+        }
 
         return $this->getSize($attribute, $value) <= $this->getSize($attribute, $comparedToValue);
     }
@@ -980,7 +1027,7 @@ trait ValidatesAttributes
      */
     public function validateImage($attribute, $value)
     {
-        return $this->validateMimes($attribute, $value, ['jpeg', 'png', 'gif', 'bmp', 'svg']);
+        return $this->validateMimes($attribute, $value, ['jpeg', 'png', 'gif', 'bmp', 'svg', 'webp']);
     }
 
     /**
@@ -1533,6 +1580,19 @@ trait ValidatesAttributes
     }
 
     /**
+     * Validate the attribute ends with a given substring.
+     *
+     * @param  string  $attribute
+     * @param  mixed   $value
+     * @param  array   $parameters
+     * @return bool
+     */
+    public function validateEndsWith($attribute, $value, $parameters)
+    {
+        return Str::endsWith($value, $parameters);
+    }
+
+    /**
      * Validate that an attribute is a string.
      *
      * @param  string  $attribute
@@ -1721,19 +1781,15 @@ trait ValidatesAttributes
     }
 
     /**
-     * Require comparison values to be of the same type.
+     * Check if the parameters are of the same type.
      *
      * @param  mixed  $first
      * @param  mixed  $second
-     * @return void
-     *
-     * @throws \InvalidArgumentException
+     * @return bool
      */
-    protected function requireSameType($first, $second)
+    protected function isSameType($first, $second)
     {
-        if (gettype($first) != gettype($second)) {
-            throw new InvalidArgumentException('The values under comparison must be of the same type');
-        }
+        return gettype($first) == gettype($second);
     }
 
     /**

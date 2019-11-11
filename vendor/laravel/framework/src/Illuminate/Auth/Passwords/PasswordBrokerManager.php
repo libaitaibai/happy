@@ -2,9 +2,9 @@
 
 namespace Illuminate\Auth\Passwords;
 
+use Illuminate\Contracts\Auth\PasswordBrokerFactory as FactoryContract;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Illuminate\Contracts\Auth\PasswordBrokerFactory as FactoryContract;
 
 /**
  * @mixin \Illuminate\Contracts\Auth\PasswordBroker
@@ -46,9 +46,7 @@ class PasswordBrokerManager implements FactoryContract
     {
         $name = $name ?: $this->getDefaultDriver();
 
-        return isset($this->brokers[$name])
-                    ? $this->brokers[$name]
-                    : $this->brokers[$name] = $this->resolve($name);
+        return $this->brokers[$name] ?? ($this->brokers[$name] = $this->resolve($name));
     }
 
     /**

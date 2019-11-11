@@ -2,33 +2,31 @@
 
 namespace Illuminate\Filesystem;
 
-use RuntimeException;
-use Illuminate\Http\File;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Str;
-use InvalidArgumentException;
-use Illuminate\Support\Carbon;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Collection;
-use League\Flysystem\AdapterInterface;
-use PHPUnit\Framework\Assert as PHPUnit;
-use League\Flysystem\FileExistsException;
-use League\Flysystem\FilesystemInterface;
-use League\Flysystem\AwsS3v3\AwsS3Adapter;
-use League\Flysystem\Cached\CachedAdapter;
-use League\Flysystem\FileNotFoundException;
-use League\Flysystem\Rackspace\RackspaceAdapter;
-use League\Flysystem\Adapter\Local as LocalAdapter;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Contracts\Filesystem\Cloud as CloudFilesystemContract;
-use Illuminate\Contracts\Filesystem\Filesystem as FilesystemContract;
 use Illuminate\Contracts\Filesystem\FileExistsException as ContractFileExistsException;
 use Illuminate\Contracts\Filesystem\FileNotFoundException as ContractFileNotFoundException;
+use Illuminate\Contracts\Filesystem\Filesystem as FilesystemContract;
+use Illuminate\Http\File;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use League\Flysystem\Adapter\Local as LocalAdapter;
+use League\Flysystem\AdapterInterface;
+use League\Flysystem\AwsS3v3\AwsS3Adapter;
+use League\Flysystem\Cached\CachedAdapter;
+use League\Flysystem\FileExistsException;
+use League\Flysystem\FileNotFoundException;
+use League\Flysystem\FilesystemInterface;
+use PHPUnit\Framework\Assert as PHPUnit;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * @mixin \League\Flysystem\FilesystemInterface
  */
-class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
+class FilesystemAdapter implements CloudFilesystemContract
 {
     /**
      * The Flysystem filesystem implementation.
@@ -138,7 +136,11 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
     {
         $response = new StreamedResponse;
 
-        $disposition = $response->headers->makeDisposition($disposition, $name ?? basename($path));
+        $filename = $name ?? basename($path);
+
+        $disposition = $response->headers->makeDisposition(
+            $disposition, $filename, $this->fallbackName($filename)
+        );
 
         $response->headers->replace($headers + [
             'Content-Type' => $this->mimeType($path),
@@ -166,6 +168,17 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
     public function download($path, $name = null, array $headers = [])
     {
         return $this->response($path, $name, $headers, 'attachment');
+    }
+
+    /**
+     * Convert the string to ASCII characters that are equivalent to the given name.
+     *
+     * @param  string  $name
+     * @return string
+     */
+    protected function fallbackName($name)
+    {
+        return str_replace('%', '', Str::ascii($name));
     }
 
     /**
@@ -400,8 +413,6 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
             return $this->driver->getUrl($path);
         } elseif ($adapter instanceof AwsS3Adapter) {
             return $this->getAwsUrl($adapter, $path);
-        } elseif ($adapter instanceof RackspaceAdapter) {
-            return $this->getRackspaceUrl($adapter, $path);
         } elseif ($adapter instanceof LocalAdapter) {
             return $this->getLocalUrl($path);
         } else {
@@ -415,9 +426,7 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
     public function readStream($path)
     {
         try {
-            $resource = $this->driver->readStream($path);
-
-            return $resource ? $resource : null;
+            return $this->driver->readStream($path) ?: null;
         } catch (FileNotFoundException $e) {
             throw new ContractFileNotFoundException($e->getMessage(), $e->getCode(), $e);
         }
@@ -454,18 +463,6 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
         return $adapter->getClient()->getObjectUrl(
             $adapter->getBucket(), $adapter->getPathPrefix().$path
         );
-    }
-
-    /**
-     * Get the URL for the file at the given path.
-     *
-     * @param  \League\Flysystem\Rackspace\RackspaceAdapter $adapter
-     * @param  string $path
-     * @return string
-     */
-    protected function getRackspaceUrl($adapter, $path)
-    {
-        return (string) $adapter->getContainer()->getObject($path)->getPublicUrl();
     }
 
     /**
@@ -519,8 +516,6 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
             return $adapter->getTemporaryUrl($path, $expiration, $options);
         } elseif ($adapter instanceof AwsS3Adapter) {
             return $this->getAwsTemporaryUrl($adapter, $path, $expiration, $options);
-        } elseif ($adapter instanceof RackspaceAdapter) {
-            return $this->getRackspaceTemporaryUrl($adapter, $path, $expiration, $options);
         } else {
             throw new RuntimeException('This driver does not support creating temporary URLs.');
         }
@@ -547,24 +542,6 @@ class FilesystemAdapter implements FilesystemContract, CloudFilesystemContract
         return (string) $client->createPresignedRequest(
             $command, $expiration
         )->getUri();
-    }
-
-    /**
-     * Get a temporary URL for the file at the given path.
-     *
-     * @param  \League\Flysystem\Rackspace\RackspaceAdapter  $adapter
-     * @param  string  $path
-     * @param  \DateTimeInterface  $expiration
-     * @param  array  $options
-     * @return string
-     */
-    public function getRackspaceTemporaryUrl($adapter, $path, $expiration, $options)
-    {
-        return $adapter->getContainer()->getObject($path)->getTemporaryUrl(
-            Carbon::now()->diffInSeconds($expiration),
-            $options['method'] ?? 'GET',
-            $options['forcePublicUrl'] ?? true
-        );
     }
 
     /**
